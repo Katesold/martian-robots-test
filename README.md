@@ -1,13 +1,13 @@
 # Martian Robots
 
-A command-line program that simulates robots moving around a bounded grid on Mars and reports where each robot ends up.
+Command-line app that moves robots around a grid on Mars and prints where each one ends up.
 
 ## Requirements
 
-- Node.js **22 or later** (Node 24 recommended). The TypeScript source is run with [tsx](https://tsx.is), so there is no build step.
-- npm (ships with Node)
+- Node.js 22+ (built on Node 24)
+- npm
 
-## Getting started
+## Setup
 
 ```sh
 npm install
@@ -15,40 +15,55 @@ npm install
 
 ## Running
 
-The program reads input from stdin. You can type it in, or pipe or redirect it from a file:
+Reads input from stdin:
 
 ```sh
-npm start                     # type the input, then end it with Ctrl+D (macOS/Linux) or Ctrl+Z then Enter (Windows)
-npm start --silent < input.txt
+npm start                        # type or paste input, finish with an empty line
+npm start --silent < input.txt   # or pipe a file in
 ```
 
 ## Testing
 
 ```sh
-npm test              # run all tests once
-npm run test:watch    # rerun the tests on every change
-npm run typecheck     # type-check with tsc (tsx compiles without checking types)
+npm test             # run tests once
+npm run test:watch   # rerun on change
+npm run typecheck    # tsc (tsx runs code without type-checking)
 ```
-
-The tests use Node's built-in test runner (`node:test`) and `node:assert`.
 
 ## Project structure
 
 ```
 src/
-├── index.ts     # entry point: reads stdin, prints results
-└── *.test.ts    # tests sit next to the code they cover
+├── index.ts              # entry point: read stdin, parse, run, print
+├── domain/               # the Mars model, no parsing or I/O
+│   ├── Orientation.ts
+│   ├── Instruction.ts    # + MAX_INSTRUCTION_LENGTH
+│   ├── Position.ts
+│   ├── World.ts          # + MAX_COORDINATE
+│   └── Robot.ts
+└── input/                # text → domain
+    ├── readLines.ts      # stdin
+    ├── parseInput.ts     # lines → world and robots
+    ├── validation.ts     # toInteger, isInRange, isOrientation, isInstruction
+    ├── errorMessages.ts  # user-facing messages
+    ├── InputError.ts     # error with line number
+    └── InputLine.ts
 ```
+
+- Grouped by domain, one concept per file.
+- `input` depends on `domain`, never the other way round.
+- Each folder has an `index.ts` barrel for imports between folders.
+- Tests sit next to the code as `*.test.ts`.
 
 ## Decisions and assumptions
 
-- **No build step or test framework.** `tsx` compiles TypeScript on the fly, including syntax such as `enum` that Node's built-in type stripping can't handle. Tests run on Node's built-in runner. The dev dependencies are just `tsx`, `typescript` and `@types/node`, so setup is a single `npm install`.
-
-<!-- TODO: add the remaining decisions, assumptions and trade-offs as the solution takes shape -->
+- **tsx, no build step.** Runs TypeScript directly.
+- **Vitest** for `it.each` tables.
+- **Parse and validation.** Input is checked in `parseInput` with Typescript validation, after that the types are trusted.
 
 ## What I'd do with more time
 
-<!-- TODO -->
+- Report all input errors at once, not just the first.
 
 ---
 
