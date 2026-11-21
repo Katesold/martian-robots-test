@@ -1,6 +1,6 @@
-import type { Position } from "./domain/index.ts";
+import type { RobotResult } from "./runRobotPrograms.ts";
 
-export function formatResult(position: Position, isLost: boolean): string {
+export function formatResult({ position, isLost }: RobotResult): string {
   const { x, y, orientation } = position;
   return `${x} ${y} ${orientation}${isLost ? " LOST" : ""}`;
 }

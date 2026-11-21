@@ -30,40 +30,54 @@ npm run test:watch   # rerun on change
 npm run typecheck    # tsc (tsx runs code without type-checking)
 ```
 
-Tests sit next to the code as `*.test.ts`:
+Tests sit next to the code as `*.test.ts`.
 
 ## Structure
 
-- `domain/`: `Robot` (moving, getting lost, scents), `World` (the grid bounds), `Scents`, `Position`, `Orientation` and the `Instruction` type. No dependencies.
-- `instructions/`: `L`, `R`, `F` and `defaultInstructions`, the map from letter to instruction.
-- `input/`: reads stdin and parses it into a world and a list of robots.
-- `moveRobots.ts`: runs the robots one after another, sharing scents.
+- `domain/`: `World` (the grid and its scents), `Robot` (placing, moving, getting lost), `RobotProgram` (a robot's starting place and instructions), `Instruction`, `Position`, `Orientation`, `Bounds` and `PlacementError`. No dependencies.
+- `instructions/`: `turnLeft`, `turnRight`, `moveForward` and `defaultInstructions`, the map from letter to instruction.
+- `input/`: reads stdin and parses it into `Bounds` and one `RobotProgram` per robot.
+- `runRobotPrograms.ts`: creates a `World`, then places each robot and runs its program in order.
 - `formatResult.ts` and `index.ts`: the output format and the CLI entry point.
 
-`domain` depends on nothing, and everything else depends on it. `moveRobots` defines the `RobotInstructions` type it takes, and the parser produces it, so `input/` depends on `moveRobots`.
-- `index.ts` barrel export files in folders for module boundaries.
+`domain` depends on nothing, and everything else depends on it. The `index.ts` file in each folder is a barrel export.
+
+## Adding a command
+
+Write an `Instruction` and give it a letter:
+
+```ts
+// src/instructions/defaultInstructions.ts
+export const jumpForward: Instruction = (position) => moveForward(moveForward(position));
+
+export const defaultInstructions: InstructionsByLetter = {
+  L: turnLeft,
+  R: turnRight,
+  F: moveForward,
+  J: jumpForward,
+};
+```
+
+Nothing else changes. The parser and its error messages read the letters from the map, and `Robot` applies the lost and scent rules to every command. Each letter must be a single character, and no two may match when uppercased.
 
 ## Decisions
 
-- Instructions are pure functions, `(position) => position`, that only say where the robot would end up. The `Robot` decides whether it can move. Because lost and scent move rules live in one place, a new instruction gets the same lost and scent behaviour for free and can't move a robot off the grid.
-- To add an instruction, write the function and add its letter to `defaultInstructions`. That map is passed into `parseInput`, so the parser and its error messages pick up the new letter without changes. Using the Command pattern in functional style, with a registry.
-- Scents are shared by every robot in one run and start empty on each run, so `moveRobots` never changes its input.
-- Input is parsed once into typed values (`World`, `Position`, instructions), with runtime checks and errors. After that the types are trusted.
-- tsx runs the TypeScript directly, so there's no build step.
-- Vitest handles TypeScript and ES modules with no configuration.
+- **Command pattern in functional form.** Each instruction is a pure function that proposes the next position. `defaultInstructions` is the registry, and `Robot` runs the commands. They're functions rather than command classes because they have no state, undo or metadata.
+- **The rules live in the domain.** `World` knows the grid and the scents. `Robot` decides whether to move, ignore the move or get lost.
+- **Placement is checked twice.** The parser rejects a start outside the world so the error can give its line number. `Robot.place`, the only way to create a robot, checks again so a `Robot` is never outside its `World`, whoever calls it.
+- **A new `World` per run**, so scents start empty and `runRobotPrograms` never changes its input.
+- tsx runs the TypeScript directly, so there's no build step. Vitest needs no configuration.
 
 ## Assumptions
 
-- Extra whitespace and letter case in the input don't matter.
-- The line after a robot's position always holds its instructions, so an empty line there means the robot has no instructions. Other blank lines (before the world line, between robots, at the end) are ignored.
-- Robots must start inside the world. The world's upper-right coordinates go up to 50, and instruction lines are at most 99 letters.
+- Letter case doesn't matter. Extra spaces are ignored, including between instructions (`R F` is the same as `RF`).
+- A blank line right after a position means that robot has no instructions. Other blank lines are ignored.
+- Robots must start inside the world. World coordinates go up to 50, and instruction lines are at most 99 characters.
 - Parsing stops at the first error.
-- A lost robot reports the last position it held on the grid, facing the way it was facing then.
-- A scent protects a grid point in every direction. From a scented corner, a move off either edge is ignored.
-- A `0 0` world (a single point) is valid.
+- A `0 0` world is valid.
 
-## What I'd do with more time
+## Future improvements
 
-- Report every input error at once instead of stopping at the first, so users can fix them all in one go.
-- Quote the user's original text in error messages. They currently show it uppercased.
-- Widen the `Instruction` type if a command ever needs to do more than move the robot, such as reporting something or changing the world.
+- Report every input error together so that the user can fix them all.
+- Add ESLint and a CI workflow.
+- Widen `Instruction` if a command ever needs more than a position, for example to read or change the world.

@@ -11,9 +11,14 @@ export async function readLines(): Promise<string[]> {
   }
 
   const lines: string[] = [];
-  for await (const line of readline.createInterface({ input: process.stdin })) {
-    if (END_OF_INPUT.test(line.trim())) break;
-    lines.push(line);
+  try {
+    const rl = readline.createInterface({ input: process.stdin });
+    for await (const line of rl) {
+      if (END_OF_INPUT.test(line.trim())) break;
+      lines.push(line);
+    }
+  } finally {
+    process.stdin.destroy();
   }
   return lines;
 }
