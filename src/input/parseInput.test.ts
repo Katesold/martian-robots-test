@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { type Instruction, Orientation } from "../domain/index.ts";
-import { defaultInstructions } from "../instructions/index.ts";
+import { defaultInstructions, moveForward, turnRight } from "../instructions/index.ts";
 import { parseInput } from "./parseInput.ts";
 
-const { R, F } = defaultInstructions;
+const F = moveForward;
+const R = turnRight;
 const { N, E } = Orientation;
 
 describe("parseInput", () => {
@@ -11,14 +12,27 @@ describe("parseInput", () => {
     {
       name: "blank lines, extra spaces and lowercase",
       lines: ["", "  5   3  ", "", "1  1 e", "  rf  "],
-      expected: { maxX: 5, maxY: 3, robots: [{ start: { x: 1, y: 1, orientation: E }, instructions: [R, F] }] },
+      expected: {
+        world: { maxX: 5, maxY: 3 },
+        robots: [{ start: { x: 1, y: 1, orientation: E }, instructions: [R, F] }],
+      },
+    },
+    {
+      name: "an empty instruction line, then blank lines between robots",
+      lines: ["5 3", "1 1 E", "", "", "2 2 N", "F"],
+      expected: {
+        world: { maxX: 5, maxY: 3 },
+        robots: [
+          { start: { x: 1, y: 1, orientation: E }, instructions: [] },
+          { start: { x: 2, y: 2, orientation: N }, instructions: [F] },
+        ],
+      },
     },
     {
       name: "a robot starting on the world's edge, with 99 instructions",
       lines: ["50 3", "5 3 N", "F".repeat(99)],
       expected: {
-        maxX: 50,
-        maxY: 3,
+        world: { maxX: 50, maxY: 3 },
         robots: [{ start: { x: 5, y: 3, orientation: N }, instructions: Array(99).fill(F) }],
       },
     },
@@ -28,7 +42,11 @@ describe("parseInput", () => {
 
   it.each([
     { name: "empty input", lines: [], error: "Missing world coordinates" },
-    { name: "a missing instruction line", lines: ["5 3", "1 1 E"], error: "Line 2: Missing robot instructions" },
+    {
+      name: "a missing instruction line",
+      lines: ["5 3", "1 1 E"],
+      error: "Line 2: Missing robot instructions",
+    },
     {
       name: "a missing coordinate of the world line",
       lines: ["5"],
@@ -47,12 +65,14 @@ describe("parseInput", () => {
     {
       name: "a badly formed robot position",
       lines: ["5 3", "1 1 X", "F"],
-      error: 'Line 2: Invalid robot position "1 1 X": use two numbers between 0 and 5 for x, and 0 and 3 for y, followed by a direction (N, E, S, W)',
+      error:
+        'Line 2: Invalid robot position "1 1 X": use two numbers between 0 and 5 for x, and 0 and 3 for y, followed by a direction (N, E, S, W)',
     },
     {
       name: "a robot outside the world",
       lines: ["5 3", "6 1 E", "F"],
-      error: 'Line 2: Robot position "6 1 E" is outside the world: x must be from 0 to 5 and y from 0 to 3',
+      error:
+        'Line 2: Robot position "6 1 E" is outside the world: x must be from 0 to 5 and y from 0 to 3',
     },
     {
       name: "an unknown instruction",
@@ -67,20 +87,18 @@ describe("parseInput", () => {
     {
       name: "an error after blank lines, with the original line number",
       lines: ["", "5 3", "", "9 1 E", "F"],
-      error: 'Line 4: Robot position "9 1 E" is outside the world: x must be from 0 to 5 and y from 0 to 3',
+      error:
+        'Line 4: Robot position "9 1 E" is outside the world: x must be from 0 to 5 and y from 0 to 3',
     },
   ])("rejects $name", ({ lines, error }) => {
     expect(() => parseInput(lines, defaultInstructions)).toThrow(error);
   });
 
-  describe("with custom instructions by letter", () => {
-    const jump: Instruction = { execute: () => {} };
-    const extended = { ...defaultInstructions, J: jump };
+  it("resolves a new instruction's letter, whatever its case, without parser changes", () => {
+    const jump: Instruction = (position) => position;
 
-    it("resolves a new letter to its instruction, without parser changes", () => {
-      const { robots } = parseInput(["5 3", "1 1 E", "FJ"], extended);
+    const { robots } = parseInput(["5 3", "1 1 E", "FJ"], { ...defaultInstructions, j: jump });
 
-      expect(robots[0]?.instructions[1]).toBe(jump);
-    });
+    expect(robots[0]?.instructions[1]).toBe(jump);
   });
 });

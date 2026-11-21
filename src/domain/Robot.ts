@@ -1,12 +1,14 @@
-import { getLeftOrientation, getRightOrientation } from "./Orientation.ts";
-import { getNextPosition, type Position } from "./Position.ts";
+import type { Instruction } from "./Instruction.ts";
+import type { Position } from "./Position.ts";
+import type { Scents } from "./Scents.ts";
+import { isInWorld, type World } from "./World.ts";
 
 export class Robot {
   #position: Position;
   #lost = false;
 
-  constructor(position: Position) {
-    this.#position = position;
+  constructor(start: Position) {
+    this.#position = start;
   }
 
   get position(): Position {
@@ -17,23 +19,17 @@ export class Robot {
     return this.#lost;
   }
 
-  turnLeft(): void {
-    this.#position = { ...this.#position, orientation: getLeftOrientation(this.#position.orientation) };
-  }
+  execute(instruction: Instruction, world: World, scents: Scents): void {
+    if (this.#lost) return;
 
-  turnRight(): void {
-    this.#position = { ...this.#position, orientation: getRightOrientation(this.#position.orientation) };
-  }
+    const next = instruction(this.#position);
+    if (isInWorld(world, next)) {
+      this.#position = next;
+      return;
+    }
+    if (scents.has(this.#position)) return;
 
-  nextPosition(): Position {
-    return getNextPosition(this.#position);
-  }
-
-  move(position: Position): void {
-    this.#position = position;
-  }
-
-  markLost(): void {
+    scents.add(this.#position);
     this.#lost = true;
   }
 }

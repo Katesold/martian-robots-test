@@ -1,6 +1,4 @@
-import type { Robot } from "./Robot.ts";
-import type { World } from "./World.ts";
+import type { Position } from "./Position.ts";
 
-export interface Instruction {
-  execute(robot: Robot, world: World): void;
-}
+// returns where the robot would be next but the Robot decides whether it can go there
+export type Instruction = (position: Position) => Position;

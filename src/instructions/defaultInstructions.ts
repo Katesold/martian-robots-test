@@ -1,28 +1,36 @@
-import type { Instruction } from "../domain/index.ts";
+import {
+  getLeftOrientation,
+  getRightOrientation,
+  type Instruction,
+  Orientation,
+} from "../domain/index.ts";
 import type { InstructionsByLetter } from "./InstructionsByLetter.ts";
 
-export const turnLeft: Instruction = { execute: (robot) => robot.turnLeft() };
+export const turnLeft: Instruction = (position) => ({
+  ...position,
+  orientation: getLeftOrientation(position.orientation),
+});
 
-export const turnRight: Instruction = { execute: (robot) => robot.turnRight() };
+export const turnRight: Instruction = (position) => ({
+  ...position,
+  orientation: getRightOrientation(position.orientation),
+});
 
-export const moveForward: Instruction = {
-  execute(robot, world) {
-    const next = robot.nextPosition();
-
-    if (world.contains(next)) {
-      robot.move(next);
-      return;
-    }
-    if (world.hasScent(robot.position)) {
-      return;
-    }
-    world.leaveScent(robot.position);
-    robot.markLost();
-  },
+export const moveForward: Instruction = ({ x, y, orientation }) => {
+  switch (orientation) {
+    case Orientation.N:
+      return { x, y: y + 1, orientation };
+    case Orientation.E:
+      return { x: x + 1, y, orientation };
+    case Orientation.S:
+      return { x, y: y - 1, orientation };
+    case Orientation.W:
+      return { x: x - 1, y, orientation };
+  }
 };
 
-export const defaultInstructions = Object.freeze({
+export const defaultInstructions: InstructionsByLetter = {
   L: turnLeft,
   R: turnRight,
   F: moveForward,
-} satisfies InstructionsByLetter);
+};

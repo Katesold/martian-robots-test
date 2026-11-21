@@ -11,8 +11,8 @@ import { moveRobots } from "./moveRobots.ts";
 
 try {
   const lines = await readLines();
-  const parsedInput = parseInput(lines, defaultInstructions);
-  const results = moveRobots(parsedInput);
+  const { world, robots } = parseInput(lines, defaultInstructions);
+  const results = moveRobots(world, robots);
 
   for (const { position, isLost } of results) {
     console.log(formatResult(position, isLost));

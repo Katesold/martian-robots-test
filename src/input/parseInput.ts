@@ -1,5 +1,13 @@
-import { type Instruction, isOrientation, Orientation, type Position, World } from "../domain/index.ts";
+import {
+  type Instruction,
+  isInWorld,
+  isOrientation,
+  Orientation,
+  type Position,
+  type World,
+} from "../domain/index.ts";
 import type { InstructionsByLetter } from "../instructions/index.ts";
+import type { RobotInstructions } from "../moveRobots.ts";
 import { MAX_COORDINATE, MAX_INSTRUCTION_LENGTH } from "./constants.ts";
 import { InputError } from "./InputError.ts";
 import { toInteger } from "./validation.ts";
@@ -9,15 +17,11 @@ interface InputLine {
   lineNumber: number;
 }
 
-export interface ParsedRobot {
-  start: Position;
-  instructions: Instruction[];
-}
+type InstructionLookup = ReadonlyMap<string, Instruction>;
 
 export interface ParsedInput {
-  maxX: number;
-  maxY: number;
-  robots: ParsedRobot[];
+  world: World;
+  robots: RobotInstructions[];
 }
 
 function parseWorld(line: InputLine): World {
@@ -39,7 +43,7 @@ function parseWorld(line: InputLine): World {
       line.lineNumber,
     );
   }
-  return new World(maxX, maxY);
+  return { maxX, maxY };
 }
 
 function parsePosition(line: InputLine, world: World): Position {
@@ -55,7 +59,7 @@ function parsePosition(line: InputLine, world: World): Position {
     );
   }
   const position = { x, y, orientation };
-  if (!world.contains(position)) {
+  if (!isInWorld(world, position)) {
     throw new InputError(
       `Robot position "${line.text}" is outside the world: x must be from 0 to ${world.maxX} and y from 0 to ${world.maxY}`,
       line.lineNumber,
@@ -64,14 +68,14 @@ function parsePosition(line: InputLine, world: World): Position {
   return position;
 }
 
-function parseInstructions(line: InputLine, instructionsByLetter: InstructionsByLetter): Instruction[] {
+function parseInstructions(line: InputLine, lookup: InstructionLookup): Instruction[] {
   const instructions: Instruction[] = [];
 
   for (const letter of line.text) {
-    const instruction = instructionsByLetter[letter];
+    const instruction = lookup.get(letter);
     if (instruction === undefined) {
       throw new InputError(
-        `Invalid robot instructions "${line.text}": use ${Object.keys(instructionsByLetter).join(", ")}`,
+        `Invalid robot instructions "${line.text}": use ${[...lookup.keys()].join(", ")}`,
         line.lineNumber,
       );
     }
@@ -87,41 +91,63 @@ function parseInstructions(line: InputLine, instructionsByLetter: InstructionsBy
 }
 
 // position line + instruction line per Robot
-function parseRobots(lines: InputLine[], world: World, instructionsByLetter: InstructionsByLetter): ParsedRobot[] {
-  const robots: ParsedRobot[] = [];
+function parseRobots(
+  lines: InputLine[],
+  world: World,
+  lookup: InstructionLookup,
+): RobotInstructions[] {
+  const robots: RobotInstructions[] = [];
 
-  for (let i = 0; i < lines.length; i += 2) {
+  for (let i = 0; i < lines.length; i++) {
     const positionLine = lines[i];
-    const instructionLine = lines[i + 1];
+    if (!positionLine || positionLine.text === "") continue;
 
-    if (!positionLine) break;
+    // blank line means no instructions
+    i++;
+    const instructionLine = lines[i];
     if (!instructionLine) {
       throw new InputError("Missing robot instructions", positionLine.lineNumber);
     }
 
     robots.push({
       start: parsePosition(positionLine, world),
-      instructions: parseInstructions(instructionLine, instructionsByLetter),
+      instructions: parseInstructions(instructionLine, lookup),
     });
   }
 
   return robots;
 }
 
-// currently throws at the first error, 
-// would improve it and collect all errors so that users can fix them all
-export function parseInput(rawLines: string[], instructionsByLetter: InstructionsByLetter): ParsedInput {
-  const lines: InputLine[] = rawLines
-    .map((text, index) => ({ text: text.trim().toUpperCase(), lineNumber: index + 1 }))
-    .filter((line) => line.text !== "");
+// input is uppercased before the lookup, so the letters are too
+function uppercaseKeys(instructionsByLetter: InstructionsByLetter): InstructionLookup {
+  const instructions = new Map<string, Instruction>();
+  for (const [letter, instruction] of Object.entries(instructionsByLetter)) {
+    instructions.set(letter.toUpperCase(), instruction);
+  }
+  return instructions;
+}
 
-  const [worldLine, ...robotLines] = lines;
+// currently throws at the first error,
+// would improve it and collect all errors so that users can fix them all
+export function parseInput(
+  rawLines: string[],
+  instructionsByLetter: InstructionsByLetter,
+): ParsedInput {
+  const lines: InputLine[] = rawLines.map((text, index) => ({
+    text: text.trim().toUpperCase(),
+    lineNumber: index + 1,
+  }));
+
+  const worldIndex = lines.findIndex((line) => line.text !== "");
+  const worldLine = lines[worldIndex];
   if (!worldLine) {
     throw new InputError("Missing world coordinates");
   }
 
   const world = parseWorld(worldLine);
-  const robots = parseRobots(robotLines, world, instructionsByLetter);
+  const robotLines = lines.slice(worldIndex + 1);
+  const instructions = uppercaseKeys(instructionsByLetter);
+  const robots = parseRobots(robotLines, world, instructions);
 
-  return { maxX: world.maxX, maxY: world.maxY, robots };
+  return { world, robots };
 }
