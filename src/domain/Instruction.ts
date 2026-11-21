@@ -1,7 +1,6 @@
-export const MAX_INSTRUCTION_LENGTH = 99;
+import type { Robot } from "./Robot.ts";
+import type { World } from "./World.ts";
 
-export enum Instruction {
-  Left = "L",
-  Right = "R",
-  Forward = "F",
+export interface Instruction {
+  execute(robot: Robot, world: World): void;
 }

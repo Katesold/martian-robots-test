@@ -1,26 +1,23 @@
-import {
-  MAX_COORDINATE,
-  MAX_INSTRUCTION_LENGTH,
-  type Instruction,
-  type Position,
-  type Robot,
-  type World,
-} from "../domain/index.ts";
-import {
-  invalidRobotInstructions,
-  invalidRobotPosition,
-  invalidWorldCoordinates,
-  robotOutsideWorld,
-  tooManyInstructions,
-  worldOutOfRange,
-} from "./errorMessages.ts";
+import { type Instruction, isOrientation, Orientation, type Position, World } from "../domain/index.ts";
+import type { InstructionsByLetter } from "../instructions/index.ts";
+import { MAX_COORDINATE, MAX_INSTRUCTION_LENGTH } from "./constants.ts";
 import { InputError } from "./InputError.ts";
-import type { InputLine } from "./InputLine.ts";
-import { isInRange, isInstruction, isOrientation, toInteger } from "./validation.ts";
+import { toInteger } from "./validation.ts";
+
+interface InputLine {
+  text: string;
+  lineNumber: number;
+}
+
+export interface ParsedRobot {
+  start: Position;
+  instructions: Instruction[];
+}
 
 export interface ParsedInput {
-  world: World;
-  robots: Robot[];
+  maxX: number;
+  maxY: number;
+  robots: ParsedRobot[];
 }
 
 function parseWorld(line: InputLine): World {
@@ -30,12 +27,19 @@ function parseWorld(line: InputLine): World {
   const maxY = toInteger(yMaxValue);
 
   if (values.length !== 2 || maxX === undefined || maxY === undefined) {
-    throw new InputError(invalidWorldCoordinates(line.text), line.lineNumber);
+    throw new InputError(
+      `Invalid world coordinates "${line.text}": use two whole numbers from 0 to ${MAX_COORDINATE}`,
+      line.lineNumber,
+    );
   }
-  if (!isInRange(maxX, MAX_COORDINATE) || !isInRange(maxY, MAX_COORDINATE)) {
-    throw new InputError(worldOutOfRange(line.text), line.lineNumber);
+
+  if (maxX > MAX_COORDINATE || maxY > MAX_COORDINATE) {
+    throw new InputError(
+      `World coordinates "${line.text}" are out of range: each must be from 0 to ${MAX_COORDINATE}`,
+      line.lineNumber,
+    );
   }
-  return { maxX, maxY };
+  return new World(maxX, maxY);
 }
 
 function parsePosition(line: InputLine, world: World): Position {
@@ -45,29 +49,46 @@ function parsePosition(line: InputLine, world: World): Position {
   const y = toInteger(yValue);
 
   if (values.length !== 3 || x === undefined || y === undefined || !isOrientation(orientation)) {
-    throw new InputError(invalidRobotPosition(line.text), line.lineNumber);
+    throw new InputError(
+      `Invalid robot position "${line.text}": use two numbers between 0 and ${world.maxX} for x, and 0 and ${world.maxY} for y, followed by a direction (${Object.values(Orientation).join(", ")})`,
+      line.lineNumber,
+    );
   }
-  if (!isInRange(x, world.maxX) || !isInRange(y, world.maxY)) {
-    throw new InputError(robotOutsideWorld(line.text, world), line.lineNumber);
+  const position = { x, y, orientation };
+  if (!world.contains(position)) {
+    throw new InputError(
+      `Robot position "${line.text}" is outside the world: x must be from 0 to ${world.maxX} and y from 0 to ${world.maxY}`,
+      line.lineNumber,
+    );
   }
-  return { x, y, orientation };
+  return position;
 }
 
-function parseInstructions(line: InputLine): Instruction[] {
-  const letters = [...line.text];
+function parseInstructions(line: InputLine, instructionsByLetter: InstructionsByLetter): Instruction[] {
+  const instructions: Instruction[] = [];
 
-  if (!letters.every(isInstruction)) {
-    throw new InputError(invalidRobotInstructions(line.text), line.lineNumber);
+  for (const letter of line.text) {
+    const instruction = instructionsByLetter[letter];
+    if (instruction === undefined) {
+      throw new InputError(
+        `Invalid robot instructions "${line.text}": use ${Object.keys(instructionsByLetter).join(", ")}`,
+        line.lineNumber,
+      );
+    }
+    instructions.push(instruction);
   }
-  if (letters.length > MAX_INSTRUCTION_LENGTH) {
-    throw new InputError(tooManyInstructions(letters.length), line.lineNumber);
+  if (instructions.length > MAX_INSTRUCTION_LENGTH) {
+    throw new InputError(
+      `Too many robot instructions: ${instructions.length} given, the maximum is ${MAX_INSTRUCTION_LENGTH}`,
+      line.lineNumber,
+    );
   }
-  return letters;
+  return instructions;
 }
 
-// position line + instruction line
-function parseRobots(lines: InputLine[], world: World): Robot[] {
-  const robots: Robot[] = [];
+// position line + instruction line per Robot
+function parseRobots(lines: InputLine[], world: World, instructionsByLetter: InstructionsByLetter): ParsedRobot[] {
+  const robots: ParsedRobot[] = [];
 
   for (let i = 0; i < lines.length; i += 2) {
     const positionLine = lines[i];
@@ -78,10 +99,10 @@ function parseRobots(lines: InputLine[], world: World): Robot[] {
       throw new InputError("Missing robot instructions", positionLine.lineNumber);
     }
 
-    const position = parsePosition(positionLine, world);
-    const instructions = parseInstructions(instructionLine);
-
-    robots.push({ position, instructions });
+    robots.push({
+      start: parsePosition(positionLine, world),
+      instructions: parseInstructions(instructionLine, instructionsByLetter),
+    });
   }
 
   return robots;
@@ -89,7 +110,7 @@ function parseRobots(lines: InputLine[], world: World): Robot[] {
 
 // currently throws at the first error, 
 // would improve it and collect all errors so that users can fix them all
-export function parseInput(rawLines: string[]): ParsedInput {
+export function parseInput(rawLines: string[], instructionsByLetter: InstructionsByLetter): ParsedInput {
   const lines: InputLine[] = rawLines
     .map((text, index) => ({ text: text.trim().toUpperCase(), lineNumber: index + 1 }))
     .filter((line) => line.text !== "");
@@ -100,7 +121,7 @@ export function parseInput(rawLines: string[]): ParsedInput {
   }
 
   const world = parseWorld(worldLine);
-  const robots = parseRobots(robotLines, world);
+  const robots = parseRobots(robotLines, world, instructionsByLetter);
 
-  return { world, robots };
+  return { maxX: world.maxX, maxY: world.maxY, robots };
 }
